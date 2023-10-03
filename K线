@@ -1,80 +1,80 @@
-//+----------------------------------------------------+
-//| KKK Trader.mq5 |
-//+------------------------------------------------------------ -----+
-#属性版本“1.168”
-#include <交易\PositionInfo.mqh>
-#include <贸易\贸易.mqh>
-#include <交易\SymbolInfo.mqh>  
-#include <交易\AccountInfo.mqh>
-CPositionInfo m_position; // 交易头寸对象
-CTrade m_trade; // 交易对象
-CSymbolInfo m_symbol; // 交易品种信息对象
-CAccountInfo m_account; // 账户信息包装
-//--- 输入参数
-输入双倍 InpLots = 0.5；//很多
-输入int Inp_RSI_ma_period = 14; // RSI：平均周期
-输入 ENUM_APPLIED_PRICE Inp_RSI_applied_price = PRICE_CLOSE; // RSI：价格类型
-输入 int Inp_AMA_ama_period = 9; // AMA：平均周期  
-输入int Inp_AMA_fast_ma_period = 2; // AMA：快速移动平均线周期
-输入int Inp_AMA_slow_ma_period = 30; // AMA：慢MA周期
-输入 int Inp_AMA_ama_shift = 0; // AMA：指标的水平移动
-输入 ENUM_APPLIED_PRICE Inp_AMA_applied_price = PRICE_CLOSE; // AMA: 价格类型
+//+-----------------------------------------+
+//|             KKK Trader.mq5              |
+//+-----------------------------------------+
+#property version   "1.168"
+#include <Trade\PositionInfo.mqh>
+#include <Trade\Trade.mqh>
+#include <Trade\SymbolInfo.mqh>  
+#include <Trade\AccountInfo.mqh>
+CPositionInfo  m_position;                   // trade position object
+CTrade         m_trade;                      // trading object
+CSymbolInfo    m_symbol;                     // symbol info object
+CAccountInfo   m_account;                    // account info wrapper
+//--- input parameters
+input double               InpLots                 = 0.5;         // Lots
+input int                  Inp_RSI_ma_period       = 14;          // RSI: averaging period 
+input ENUM_APPLIED_PRICE   Inp_RSI_applied_price   = PRICE_CLOSE; // RSI: type of price 
+input int                  Inp_AMA_ama_period      = 9;           // AMA: average period  
+input int                  Inp_AMA_fast_ma_period  = 2;           // AMA: fast MA period 
+input int                  Inp_AMA_slow_ma_period  = 30;          // AMA: slow MA period 
+input int                  Inp_AMA_ama_shift       = 0;           // AMA: horizontal shift of the indicator 
+input ENUM_APPLIED_PRICE   Inp_AMA_applied_price   = PRICE_CLOSE; // AMA: type of the price 
 //---
-输入双精度 Inp_RSI_level_up = 70.0; // RSI 水平上升
-输入双精度 Inp_RSI_level_down = 30.0; // RSI 水平下降
-输入 uchar InpStepLength = 3; // 步长
-输入双倍InpProfit = 88.0；//平仓的利润规避
-输入双 InpWithdrawal = 0.0; // 退出
-输入ulong m_magic=248845656；//幻数
+input double               Inp_RSI_level_up        = 70.0;        // RSI Level Up
+input double               Inp_RSI_level_down      = 30.0;        // RSI Level Down
+input uchar                InpStepLength           = 3;           // Step Length
+input double               InpProfit               = 88.0;        // Profit limit for close all
+input double               InpWithdrawal           = 0.0;         // Withdrawal
+input ulong                m_magic=248845656;                     // magic number
 //---
-ulong m_slippage=10; // 滑点
+ulong  m_slippage=10;            // slippage
 
-inhandle_iRSI；//用于存储iRSI指标句柄的变量
-inhandle_iAMA；//用于存储iAMA指标句柄的变量
+int    handle_iRSI;              // variable for storing the handle of the iRSI indicator
+int    handle_iAMA;              // variable for storing the handle of the iAMA indicator 
 
-双m_调整_点；//点值调整为3或5点
+double m_adjusted_point;         // point value adjusted for 3 or 5 points
 
-双m_balance=0.0;
-//+------------------------------------------------------------ -------------- -------------------+
-//| 专家初始化函数|
-//+------------------------------------------------------------ -------------- -------------------+
+double m_balance=0.0;
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
 int OnInit()
   {
    m_balance=m_account.Balance();
 //---
-   if(!m_symbol.Name(Symbol())) // 设置交易品种名称
-      返回（INIT_FAILED）；
-   刷新率（）；
+   if(!m_symbol.Name(Symbol())) // sets symbol name
+      return(INIT_FAILED);
+   RefreshRates();
 
-   字符串 err_text="";
+   string err_text="";
    if(!CheckVolumeValue(InpLots,err_text))
      {
-      打印(__FUNCTION__,",错误:",err_text);
-      返回（INIT_PARAMETERS_INCORRECT）；
+      Print(__FUNCTION__,", ERROR: ",err_text);
+      return(INIT_PARAMETERS_INCORRECT);
      }
 //---
    m_trade.SetExpertMagicNumber(m_magic);
    m_trade.SetMarginMode();
    m_trade.SetTypeFillingBySymbol(m_symbol.Name());
    m_trade.SetDeviationInPoints(m_slippage);
-//--- 创建 iRSI 指标的句柄
+//--- create handle of the indicator iRSI
    handle_iRSI=iRSI(m_symbol.Name(),Period(),Inp_RSI_ma_period,Inp_RSI_applied_price);
-//--- 如果未创建句柄
-   如果（handle_iRSI==INVALID_HANDLE）
+//--- if the handle is not created 
+   if(handle_iRSI==INVALID_HANDLE)
      {
-      //--- 告知失败并输出错误代码
-      PrintFormat("无法为符号 %s/%s 创建 iRSI 指标句柄，错误代码 %d",
+      //--- tell about the failure and output the error code 
+      PrintFormat("Failed to create handle of the iRSI indicator for the symbol %s/%s, error code %d",
                   m_symbol.Name(),
-                  EnumToString(句点()),
-                  获取最后一个错误());
-      //--- 指标提前停止
-      返回（INIT_FAILED）；
+                  EnumToString(Period()),
+                  GetLastError());
+      //--- the indicator is stopped early 
+      return(INIT_FAILED);
      }
-//--- 创建 iAMA 指标句柄
+//--- create handle of the indicator iAMA
    handle_iAMA=iAMA(m_symbol.Name(),Period(),Inp_AMA_ama_period,Inp_AMA_fast_ma_period,
                     Inp_AMA_slow_ma_period,Inp_AMA_ama_shift,Inp_AMA_applied_price);
-//--- 如果未创建句柄
-   如果（handle_iAMA==INVALID_HANDLE）
+//--- if the handle is not created 
+   if(handle_iAMA==INVALID_HANDLE)
      {
       //--- tell about the failure and output the error code 
       PrintFormat("Failed to create handle of the iAMA indicator for the symbol %s/%s, error code %d",
@@ -453,6 +453,6 @@ void CloseAllPositions(const string symbol_name)
    {
     for (int i = PositionsTotal() - 1; i >= 0; i--)
        if (m_position.SelectByIndex(i) && m_position.Symbol() == symbol_name && m_position.Magic() == m_magic)
-            m_trade.PositionClose(交易品种名称,m_position.Ticket()); // 按指定交易品种平仓
+            m_trade.PositionClose(symbol_name,m_position.Ticket()); // close a position by the specified symbol
    }
-//+------------------------------------------------------------ -------------------+
+//+------------------------------------------------------------------+
